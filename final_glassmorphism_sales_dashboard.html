@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #d4f1ff, #a6dcef);
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+        }
+        #dashboard {
+            display: none;
+            margin-top: 20px;
+        }
+        .chart-container {
+            width: 40%;
+            display: inline-block;
+            vertical-align: top;
+            margin: 15px;
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        input[type="file"] {
+            padding: 10px;
+            border: none;
+            background: #004e92;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="fileInput" accept=".json">
+    <p id="statusText">Upload your sales data JSON file</p>
+
+    <div id="dashboard">
+        <div class="chart-container" id="sales-trend"></div>
+        <div class="chart-container" id="top-products"></div>
+        <div class="chart-container" id="sales-region"></div>
+        <div class="chart-container" id="order-status"></div>
+        <div class="chart-container" id="monthly-sales"></div>
+        <div class="chart-container" id="quarterly-sales"></div>
+        <div class="chart-container" id="product-category"></div>
+        <div class="chart-container" id="profit-margin"></div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        generateDashboard(data);
+                        document.getElementById('dashboard').style.display = 'block';
+                    } catch (error) {
+                        alert("Invalid JSON file. Please upload a valid sales data file.");
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        function generateDashboard(data) {
+            const salesByMonth = {}, salesByQuarter = {}, productSales = {}, salesByCountry = {};
+            const orderStatusCounts = {}, profitMargin = {};
+
+            data.forEach(row => {
+                const monthKey = `${row.YEAR_ID}-${row.MONTH_ID}`;
+                salesByMonth[monthKey] = (salesByMonth[monthKey] || 0) + row.SALES;
+
+                const quarterKey = `Q${row.QTR_ID}-${row.YEAR_ID}`;
+                salesByQuarter[quarterKey] = (salesByQuarter[quarterKey] || 0) + row.SALES;
+
+                productSales[row.PRODUCTLINE] = (productSales[row.PRODUCTLINE] || 0) + row.SALES;
+
+                salesByCountry[row.COUNTRY] = (salesByCountry[row.COUNTRY] || 0) + row.SALES;
+
+                orderStatusCounts[row.STATUS] = (orderStatusCounts[row.STATUS] || 0) + 1;
+
+                profitMargin[row.PRODUCTLINE] = (profitMargin[row.PRODUCTLINE] || 0) + (row.MSRP - row.PRICEEACH) * row.QUANTITYORDERED;
+            });
+
+            function plotChart(id, type, labels, values, title, orientation = 'v') {
+                Plotly.newPlot(id, [{
+                    x: orientation === 'v' ? labels : values,
+                    y: orientation === 'v' ? values : labels,
+                    type: type,
+                    orientation: orientation,
+                    marker: { color: ['#004e92', '#ff7b00', '#ff0066', '#00cc99', '#cc0000', '#ffcc00', '#6600cc'] }
+                }], { title: title, xaxis: { title: labels }, yaxis: { title: values } });
+            }
+
+            plotChart('sales-trend', 'scatter', Object.keys(salesByMonth).sort(), Object.values(salesByMonth), 'Sales Performance Over Time');
+            plotChart('top-products', 'bar', Object.keys(productSales), Object.values(productSales), 'Top-Selling Products', 'h');
+            plotChart('order-status', 'bar', Object.keys(orderStatusCounts), Object.values(orderStatusCounts), 'Order Status Breakdown');
+            plotChart('monthly-sales', 'bar', Object.keys(salesByMonth).sort(), Object.values(salesByMonth), 'Monthly Sales Trends');
+            plotChart('quarterly-sales', 'bar', Object.keys(salesByQuarter).sort(), Object.values(salesByQuarter), 'Quarterly Sales Trends');
+            plotChart('profit-margin', 'bar', Object.keys(profitMargin), Object.values(profitMargin), 'Profit Margin by Product', 'h');
+            plotChart('product-category', 'bar', Object.keys(productSales), Object.values(productSales), 'Sales by Product Category', 'h');
+
+            Plotly.newPlot('sales-region', [{
+                type: 'choropleth',
+                locationmode: 'country names',
+                locations: Object.keys(salesByCountry),
+                z: Object.values(salesByCountry),
+                colorscale: [['0', 'rgb(255, 217, 102)'], ['0.2', 'rgb(255, 102, 102)'], ['0.4', 'rgb(255, 0, 102)'], 
+                             ['0.6', 'rgb(153, 51, 255)'], ['0.8', 'rgb(51, 102, 255)'], ['1', 'rgb(0, 204, 102)']],
+                reversescale: false
+            }], { title: 'Sales by Region' });
+        }
+    </script>
+
+</body>
+</html>
